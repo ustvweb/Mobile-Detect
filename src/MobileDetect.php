@@ -929,6 +929,26 @@ class MobileDetect
     ];
 
     /**
+     * Utilities.
+     *
+     * @var array
+     */
+    protected static $utilities = array(
+        // Experimental. When a mobile device wants to switch to 'Desktop Mode'.
+        // http://scottcate.com/technology/windows-phone-8-ie10-desktop-or-mobile/
+        // https://github.com/serbanghita/Mobile-Detect/issues/57#issuecomment-15024011
+        // https://developers.facebook.com/docs/sharing/webmasters/crawler/
+        'Bot'         => 'Googlebot|facebookexternalhit|Google-AMPHTML|s~amp-validator|AdsBot-Google|Google Keyword Suggestion|Facebot|YandexBot|YandexMobileBot|bingbot|ia_archiver|AhrefsBot|Ezooms|GSLFbot|WBSearchBot|Twitterbot|TweetmemeBot|Twikle|PaperLiBot|Wotbox|UnwindFetchor|Exabot|MJ12bot|YandexImages|TurnitinBot|Pingdom|contentkingapp|AspiegelBot|Semrush|DotBot|PetalBot|MetadataScraper',
+        'MobileBot'   => 'Googlebot-Mobile|AdsBot-Google-Mobile|YahooSeeker/M1A1-R2D2',
+        'DesktopMode' => 'WPDesktop',
+        'TV'          => 'SonyDTV|HbbTV', // experimental
+        'WebKit'      => '(webkit)[ /]([\w.]+)',
+        // @todo: Include JXD consoles.
+        'Console'     => '\b(Nintendo|Nintendo WiiU|Nintendo 3DS|Nintendo Switch|PLAYSTATION|Xbox)\b',
+        'Watch'       => 'SM-V700',
+    );
+
+    /**
      * All possible HTTP headers that represent the
      * User-Agent string.
      * @var array
@@ -1085,6 +1105,9 @@ class MobileDetect
 
         // Set the User-Agent even if it's an empty string so that "autoInitOfHttpHeaders" doesn't throw an exception.
         // https://github.com/serbanghita/Mobile-Detect/issues/946#issuecomment-1885675939
+        if(isset($httpHeaders['HTTP_USER_AGENT'])){
+            $this->userAgent = $httpHeaders['HTTP_USER_AGENT'];
+        }
         if (!$this->hasUserAgent()) {
             $this->setUserAgent("");
         }
@@ -1225,8 +1248,25 @@ class MobileDetect
      */
     public function setUserAgent(string $userAgent): string
     {
-        $preparedUserAgent = $this->prepareUserAgent($userAgent);
-        return $this->userAgent = $preparedUserAgent;
+        if (false === empty($userAgent)) {
+            return $this->userAgent = $this->prepareUserAgent($userAgent);
+        } else {
+            $this->userAgent = null;
+            foreach ($this->getUaHttpHeaders() as $altHeader) {
+                if (false === empty($this->httpHeaders[$altHeader])) { // @todo: should use getHttpHeader(), but it would be slow. (Serban)
+                    $this->userAgent .= $this->httpHeaders[$altHeader] . " ";
+                }
+            }
+
+            if (!empty($this->userAgent)) {
+                return $this->userAgent = $this->prepareUserAgent($this->userAgent);
+            }
+        }
+
+        if (count($this->getCfHeaders()) > 0) {
+            return $this->userAgent = 'Amazon CloudFront';
+        }
+        return $this->userAgent = null;
     }
 
     /**
@@ -1287,6 +1327,16 @@ class MobileDetect
     public static function getBrowsers(): array
     {
         return static::$browsers;
+    }
+
+    /**
+     * Retrieve the list of known utilities.
+     *
+     * @return array List of utilities.
+     */
+    public static function getUtilities()
+    {
+        return self::$utilities;
     }
 
     /**
@@ -1537,8 +1587,11 @@ class MobileDetect
      *
      * @todo: search in the HTTP headers too.
      */
-    public function match(string $regex, string $userAgent): bool
+    public function match( $regex, string $userAgent): bool
     {
+        if (empty($userAgent)) {
+            return false;
+        }
         $match = (bool) preg_match(sprintf('#%s#is', $regex), $userAgent, $matches);
         // If positive match is found, store the results for debug.
         if ($match) {
