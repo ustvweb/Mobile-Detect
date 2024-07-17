@@ -1263,7 +1263,7 @@ class MobileDetect
             }
         }
 
-        if (count($this->getCfHeaders()) > 0) {
+        if (count($this->getCloudFrontHttpHeaders()) > 0) {
             return $this->userAgent = 'Amazon CloudFront';
         }
         return $this->userAgent = null;
